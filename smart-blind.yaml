@@ -1,0 +1,89 @@
+esphome:
+  name: smart-blinds
+  platform: ESP8266
+  board: d1_mini
+
+# Wifi Config
+<<: !include wifi_config.yaml
+
+api:
+  services:
+    - service: blinds_control
+      variables:
+        level: float
+      then:
+        - servo.write:
+            id: blinds
+            level: !lambda "return level / -100.0;"
+        - servo.detach: blinds
+
+  password: !secret esp_api_pass
+
+ota:
+  password: !secret esp_api_pass
+
+time:
+  - platform: homeassistant
+    id: homeassistant_time
+
+globals:
+  - id: blinds_open
+    type: bool
+    restore_value: false
+    initial_value: "false"
+
+binary_sensor:
+  - platform: gpio
+    pin: D0
+    id: button_id
+    on_press:
+      then:
+        - switch.toggle: blinds_controls
+        - delay: 2s
+
+switch:
+  - platform: template
+    name: "Living Blinds Control"
+    id: blinds_controls
+    restore_state: false
+
+    turn_on_action:
+      - servo.write:
+          id: blinds
+          level: -100%
+      - servo.detach: blinds
+      - globals.set:
+          id: blinds_open
+          value: "true"
+
+    turn_off_action:
+      - servo.write:
+          id: blinds
+          level: 100%
+      - servo.detach: blinds
+      - globals.set:
+          id: blinds_open
+          value: "false"
+    lambda: |-
+      return id(blinds_open);
+
+servo:
+  - id: blinds
+    output: pwm_output_right
+    restore: false
+    auto_detach_time: 1s
+
+output:
+  - platform: esp8266_pwm
+    id: pwm_output_right
+    pin: D4
+    frequency: 50 Hz
+
+dallas:
+  - pin: D8
+    update_interval: 600s
+
+sensor:
+  - platform: dallas
+    address: 0x6403169779895828
+    name: "Temp"
